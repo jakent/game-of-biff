@@ -1,4 +1,4 @@
-# Biff starter project
+# Game of Biff
 
 This is the starter project for Biff.
 

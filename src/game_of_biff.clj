@@ -1,26 +1,20 @@
 (ns game-of-biff
-  (:require [com.biffweb :as biff]
-            [game-of-biff.email :as email]
-            [game-of-biff.app :as app]
-            [game-of-biff.home :as home]
-            [game-of-biff.middleware :as mid]
-            [game-of-biff.ui :as ui]
-            [game-of-biff.worker :as worker]
-            [game-of-biff.schema :as schema]
-            [clojure.test :as test]
+  (:require [clojure.test :as test]
             [clojure.tools.logging :as log]
             [clojure.tools.namespace.repl :as tn-repl]
+            [com.biffweb :as biff]
+            [game-of-biff.home :as home]
+            [game-of-biff.middleware :as mid]
+            [game-of-biff.schema :as schema]
+            [game-of-biff.ui :as ui]
             [malli.core :as malc]
             [malli.registry :as malr]
             [nrepl.cmdline :as nrepl-cmd])
   (:gen-class))
 
 (def modules
-  [app/module
-   (biff/authentication-module {})
-   home/module
-   schema/module
-   worker/module])
+  [home/module
+   schema/module])
 
 (def routes [["" {:middleware [mid/wrap-site-defaults]}
               (keep :routes modules)]
@@ -51,7 +45,6 @@
 
 (def initial-system
   {:biff/modules #'modules
-   :biff/send-email #'email/send-email
    :biff/handler #'handler
    :biff/malli-opts #'malli-opts
    :biff.beholder/on-save #'on-save

@@ -4,12 +4,6 @@
             [ring.middleware.anti-forgery :as csrf]
             [ring.middleware.defaults :as rd]))
 
-(defn wrap-redirect-signed-in [handler]
-  (fn [{:keys [session] :as ctx}]
-    (if (some? (:uid session))
-      {:status 303
-       :headers {"location" "/app"}}
-      (handler ctx))))
 
 (defn wrap-signed-in [handler]
   (fn [{:keys [session] :as ctx}]

@@ -1,172 +1,69 @@
 (ns game-of-biff.home
-  (:require [clj-http.client :as http]
+  (:require [clojure.string :as str]
             [com.biffweb :as biff]
-            [game-of-biff.middleware :as mid]
-            [game-of-biff.ui :as ui]
-            [game-of-biff.settings :as settings]
-            [rum.core :as rum]
-            [xtdb.api :as xt]))
+            [game-of-biff.rules :as rules]
+            [game-of-biff.ui :as ui]))
 
-(def email-disabled-notice
-  [:.text-sm.mt-3.bg-blue-100.rounded.p-2
-   "Until you add API keys for MailerSend and reCAPTCHA, we'll print your sign-up "
-   "link to the console. See config.edn."])
+(def origin (atom [-1 -1]))
 
-(defn home-page [{:keys [recaptcha/site-key params] :as ctx}]
+(def dimensions (atom {:x-count 10
+                       :y-count 9}))
+
+(defn calculate-range [offset count]
+  (range offset (+ count offset)))
+
+(defn cell [{:keys [alive]}]
+  [:.flex-1.aspect-square.m-1 {:style {:backgroundColor (if alive "black" "wheat")}}])
+
+(defn row [{:keys [y living]}]
+  [:.flex
+   (map (fn [x] (cell {:key x :alive (contains? living [x y])}))
+        (calculate-range (first @origin) (:x-count @dimensions)))])
+
+(defn grid [{:keys [game/living]}]
+  [:.border.h-screen.w-full.flex.flex-col#game-grid
+   (map (fn [y] (row {:key y :y y :living living}))
+        (calculate-range (second @origin) (:y-count @dimensions)))])
+
+(defn home-page [ctx]
   (ui/page
-   (assoc ctx ::ui/recaptcha true)
-   (biff/form
-    {:action "/auth/send-link"
-     :id "signup"
-     :hidden {:on-error "/"}}
-    (biff/recaptcha-callback "submitSignup" "signup")
-    [:h2.text-2xl.font-bold (str "Sign up for " settings/app-name)]
-    [:.h-3]
-    [:.flex
-     [:input#email {:name "email"
-                    :type "email"
-                    :autocomplete "email"
-                    :placeholder "Enter your email address"}]
-     [:.w-3]
-     [:button.btn.g-recaptcha
-      (merge (when site-key
-               {:data-sitekey site-key
-                :data-callback "submitSignup"})
-             {:type "submit"})
-      "Sign up"]]
-    (when-some [error (:error params)]
-      [:<>
-       [:.h-1]
-       [:.text-sm.text-red-600
-        (case error
-          "recaptcha" (str "You failed the recaptcha test. Try again, "
-                           "and make sure you aren't blocking scripts from Google.")
-          "invalid-email" "Invalid email. Try again with a different address."
-          "send-failed" (str "We weren't able to send an email to that address. "
-                             "If the problem persists, try another address.")
-          "There was an error.")]])
-    [:.h-1]
-    [:.text-sm "Already have an account? " [:a.link {:href "/signin"} "Sign in"] "."]
-    [:.h-3]
-    biff/recaptcha-disclosure
-    email-disabled-notice)))
+    ctx
+    (grid nil)))
 
-(defn link-sent [{:keys [params] :as ctx}]
+(defn game-page [{:keys [game session] :as ctx}]
   (ui/page
-   ctx
-   [:h2.text-xl.font-bold "Check your inbox"]
-   [:p "We've sent a sign-in link to " [:span.font-bold (:email params)] "."]))
+    ctx
+    (grid game)))
 
-(defn verify-email-page [{:keys [params] :as ctx}]
-  (ui/page
-   ctx
-   [:h2.text-2xl.font-bold (str "Sign up for " settings/app-name)]
-   [:.h-3]
-   (biff/form
-    {:action "/auth/verify-link"
-     :hidden {:token (:token params)}}
-    [:div [:label {:for "email"}
-           "It looks like you opened this link on a different device or browser than the one "
-           "you signed up on. For verification, please enter the email you signed up with:"]]
-    [:.h-3]
-    [:.flex
-     [:input#email {:name "email" :type "email"
-                    :placeholder "Enter your email address"}]
-     [:.w-3]
-     [:button.btn {:type "submit"}
-      "Sign in"]])
-   (when-some [error (:error params)]
-     [:.h-1]
-     [:.text-sm.text-red-600
-      (case error
-        "incorrect-email" "Incorrect email address. Try again."
-        "There was an error.")])))
+(defn wrap-games [handler]
+  (fn [{:keys [biff/db] :as ctx}]
+    (let [games (biff/q db
+                        '{:find  (pull game [*])
+                          :where [[game :game/living]]})]
+      (handler (assoc ctx :games games)))))
 
-(defn signin-page [{:keys [recaptcha/site-key params] :as ctx}]
-  (ui/page
-   (assoc ctx ::ui/recaptcha true)
-   (biff/form
-    {:action "/auth/send-code"
-     :id "signin"
-     :hidden {:on-error "/signin"}}
-    (biff/recaptcha-callback "submitSignin" "signin")
-    [:h2.text-2xl.font-bold "Sign in to " settings/app-name]
-    [:.h-3]
-    [:.flex
-     [:input#email {:name "email"
-                    :type "email"
-                    :autocomplete "email"
-                    :placeholder "Enter your email address"}]
-     [:.w-3]
-     [:button.btn.g-recaptcha
-      (merge (when site-key
-               {:data-sitekey site-key
-                :data-callback "submitSignin"})
-             {:type "submit"})
-      "Sign in"]]
-    (when-some [error (:error params)]
-      [:<>
-       [:.h-1]
-       [:.text-sm.text-red-600
-        (case error
-          "recaptcha" (str "You failed the recaptcha test. Try again, "
-                           "and make sure you aren't blocking scripts from Google.")
-          "invalid-email" "Invalid email. Try again with a different address."
-          "send-failed" (str "We weren't able to send an email to that address. "
-                             "If the problem persists, try another address.")
-          "invalid-link" "Invalid or expired link. Sign in to get a new link."
-          "not-signed-in" "You must be signed in to view that page."
-          "There was an error.")]])
-    [:.h-1]
-    [:.text-sm "Don't have an account yet? " [:a.link {:href "/"} "Sign up"] "."]
-    [:.h-3]
-    biff/recaptcha-disclosure
-    email-disabled-notice)))
+(defn wrap-game [handler]
+  (fn [{:keys [games path-params foo session] :as ctx}]
+    (if-some [match (->> games
+                         (filter #(= (:xt/id %)
+                                     (parse-uuid (:id path-params))))
+                         first)]
+      (handler (assoc ctx :game match))
+      {:status  303
+       :headers {"location" "/"}})))
 
-(defn enter-code-page [{:keys [recaptcha/site-key params] :as ctx}]
-  (ui/page
-   (assoc ctx ::ui/recaptcha true)
-   (biff/form
-    {:action "/auth/verify-code"
-     :id "code-form"
-     :hidden {:email (:email params)}}
-    (biff/recaptcha-callback "submitCode" "code-form")
-    [:div [:label {:for "code"} "Enter the 6-digit code that we sent to "
-           [:span.font-bold (:email params)]]]
-    [:.h-1]
-    [:.flex
-     [:input#code {:name "code" :type "text"}]
-     [:.w-3]
-     [:button.btn.g-recaptcha
-      (merge (when site-key
-               {:data-sitekey site-key
-                :data-callback "submitCode"})
-             {:type "submit"})
-      "Sign in"]])
-   (when-some [error (:error params)]
-     [:.h-1]
-     [:.text-sm.text-red-600
-      (case error
-        "invalid-code" "Invalid code."
-        "There was an error.")])
-   [:.h-3]
-   (biff/form
-    {:action "/auth/send-code"
-     :id "signin"
-     :hidden {:email (:email params)
-              :on-error "/signin"}}
-    (biff/recaptcha-callback "submitSignin" "signin")
-    [:button.link.g-recaptcha
-     (merge (when site-key
-              {:data-sitekey site-key
-               :data-callback "submitSignin"})
-            {:type "submit"})
-     "Send another code"])))
+(defn increment [{:keys [game uri] :as ctx}]
+  (biff/submit-tx ctx
+                  [{:db/op :update
+                    :db/doc-type :game
+                    :xt/id (:xt/id game)
+                    :game/living (-> game :game/living rules/tick)}])
+  {:status  303
+   :headers {"location" (str/replace uri "/increment" "")}})
 
 (def module
-  {:routes [["" {:middleware [mid/wrap-redirect-signed-in]}
-             ["/"                  {:get home-page}]]
-            ["/link-sent"          {:get link-sent}]
-            ["/verify-link"        {:get verify-email-page}]
-            ["/signin"             {:get signin-page}]
-            ["/verify-code"        {:get enter-code-page}]]})
+  {:routes ["" {:middleware [wrap-games]}
+            ["/" {:get home-page}]
+            ["/game/:id" {:middleware [wrap-game]}
+             ["" {:get game-page}]
+             ["/increment" {:post increment}]]]})
