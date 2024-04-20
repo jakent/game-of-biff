@@ -12,12 +12,18 @@
 (defn calculate-range [offset count]
   (range offset (+ count offset)))
 
-(defn cell [{:keys [alive]}]
-  [:.flex-1.aspect-square.m-1 {:style {:backgroundColor (if alive "black" "wheat")}}])
+(defn cell [{:keys [alive coord]}]
+  [:button.flex-1.aspect-square.m-1.coord
+   {:hx-patch  ""
+    :hx-target  "this"
+    :hx-swap    "outerHTML"
+    :style      {:backgroundColor (if alive "black" "wheat")}
+    :name       "cell"
+    :value      coord}])
 
 (defn row [{:keys [y living]}]
   [:.flex
-   (map (fn [x] (cell {:key x :alive (contains? living [x y])}))
+   (map (fn [x] (cell {:key x :alive (contains? living [x y]) :coord [x y]}))
         (calculate-range (first @origin) (:x-count @dimensions)))])
 
 (defn grid [{:keys [game/living]}]
@@ -30,7 +36,7 @@
     ctx
     (grid nil)))
 
-(defn game-page [{:keys [game session] :as ctx}]
+(defn game-page [{:keys [game] :as ctx}]
   (ui/page
     ctx
     (grid game)))
@@ -43,7 +49,7 @@
       (handler (assoc ctx :games games)))))
 
 (defn wrap-game [handler]
-  (fn [{:keys [games path-params foo session] :as ctx}]
+  (fn [{:keys [games path-params] :as ctx}]
     (if-some [match (->> games
                          (filter #(= (:xt/id %)
                                      (parse-uuid (:id path-params))))
@@ -54,16 +60,26 @@
 
 (defn increment [{:keys [game uri] :as ctx}]
   (biff/submit-tx ctx
-                  [{:db/op :update
+                  [{:db/op       :update
                     :db/doc-type :game
-                    :xt/id (:xt/id game)
+                    :xt/id       (:xt/id game)
                     :game/living (-> game :game/living rules/tick)}])
   {:status  303
    :headers {"location" (str/replace uri "/increment" "")}})
+
+(defn click-cell [{:keys [game params] :as ctx}]
+  (let [coord (-> params :cell read-string)]
+    (biff/submit-tx ctx
+                    [{:db/op       :update
+                      :db/doc-type :game
+                      :xt/id       (:xt/id game)
+                      :game/living (conj (:game/living game) coord)}])
+    (cell {:alive true :coord coord})))
 
 (def module
   {:routes ["" {:middleware [wrap-games]}
             ["/" {:get home-page}]
             ["/game/:id" {:middleware [wrap-game]}
-             ["" {:get game-page}]
-             ["/increment" {:post increment}]]]})
+             ["" {:get game-page
+                  :patch click-cell
+                  :post increment}]]]})

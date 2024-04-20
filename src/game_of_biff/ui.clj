@@ -45,7 +45,7 @@
                                      head))))
     body))
 
-(defn sidebar [{:keys [uri games game foo]}]
+(defn sidebar [{:keys [uri games game]}]
   [:.h-screen.w-80.p-3.pr-0.flex.flex-col.flex-grow
    [:select
     {:class    '[text-sm
@@ -64,10 +64,7 @@
    [:.grow]
    (when game
      (biff/form
-       {:action (str uri "/increment")
-        ;:hx-swap "outerHTML"
-        ;:hx-target "#game-grid"
-        }
+       {:action uri}
        [:button.btn.w-full {:type "submit"}
         "Start"]))
    [:.h-3]])
