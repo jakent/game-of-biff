@@ -67,8 +67,8 @@
   ;; Query the database
   (let [{:keys [biff/db] :as ctx} (get-context)]
     (q db
-       '{:find (pull user [*])
-         :where [[user :user/email]]}))
+       '{:find (pull game [*])
+         :where [[game :game/started?]]}))
 
   ;; Update an existing user's email address
   (let [{:keys [biff/db] :as ctx} (get-context)

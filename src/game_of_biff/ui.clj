@@ -53,7 +53,7 @@
                  focus:border-teal-600
                  focus:ring-teal-600]
      :onchange "window.location = this.value"}
-    [:option {:value "/app"}
+    [:option {:value "/"}
      "Select a game"]
     (for [{:keys [xt/id game/name]} games
           :let [url (str "/game/" id)]]
@@ -64,7 +64,9 @@
    [:.grow]
    (when game
      (biff/form
-       {:action uri}
+       {:hx-post uri
+        :hx-target "#game-grid"
+        :hx-swap "beforeend"}
        [:button.btn.w-full {:type "submit"}
         "Start"]))
    [:.h-3]])

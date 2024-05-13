@@ -50,7 +50,7 @@
    :biff.beholder/on-save #'on-save
    :biff.middleware/on-error #'ui/on-error
    :biff.xtdb/tx-fns biff/tx-fns
-   :game-of-biff/chat-clients (atom #{})})
+   :game-of-biff/chat-clients (atom {})})
 
 (defonce system (atom {}))
 
