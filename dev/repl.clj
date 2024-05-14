@@ -48,10 +48,10 @@
                             (map (fn [k]
                                    [k (secret k)]))
                             secret-keys))]
-    {:prod-config prod-config
-     :dev-config dev-config
+    {:prod-config  prod-config
+     :dev-config   dev-config
      :prod-secrets (get-secrets prod-config)
-     :dev-secrets (get-secrets dev-config)}))
+     :dev-secrets  (get-secrets dev-config)}))
 
 (comment
   ;; Call this function if you make a change to main/initial-system,
@@ -64,20 +64,24 @@
   ;; restarting your app, and calling add-fixtures again.
   (add-fixtures)
 
+  (in-ns 'repl)
+
   ;; Query the database
   (let [{:keys [biff/db] :as ctx} (get-context)]
     (q db
-       '{:find (pull game [*])
+       '{:find  (pull game [*])
          :where [[game :game/started?]]}))
 
-  ;; Update an existing user's email address
+  ;; Stop game
   (let [{:keys [biff/db] :as ctx} (get-context)
-        user-id (biff/lookup-id db :user/email "hello@example.com")]
+        game-ids (biff/lookup-id-all db :game/started? true)]
     (biff/submit-tx ctx
-      [{:db/doc-type :user
-        :xt/id user-id
-        :db/op :update
-        :user/email "new.address@example.com"}]))
+      (map (fn [game-id]
+             {:db/doc-type   :game
+              :xt/id         game-id
+              :db/op         :update
+              :game/started? false})
+           game-ids)))
 
   (sort (keys (get-context)))
 
