@@ -6,6 +6,7 @@
             [game-of-biff.home :as home]
             [game-of-biff.middleware :as mid]
             [game-of-biff.schema :as schema]
+            [game-of-biff.background :as background]
             [game-of-biff.ui :as ui]
             [malli.core :as malc]
             [malli.registry :as malr]
@@ -14,7 +15,8 @@
 
 (def modules
   [home/module
-   schema/module])
+   schema/module
+   background/module])
 
 (def routes [["" {:middleware [mid/wrap-site-defaults]}
               (keep :routes modules)]

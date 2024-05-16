@@ -45,16 +45,11 @@
                                      head))))
     body))
 
-(defn game-controls [uri {:keys [game/started?] :as game}]
-  (when game
-    (biff/form
-      {:id        "game-controls"
-       :hx-post   uri
-       :hx-target "#game-controls"
-       :hx-swap   "outerHTML"}
-      [:button.btn.w-full {:type  "submit"
-                           :class (when started? "bg-red-500 hover:bg-red-700")}
-       (if started? "Stop" "Start")])))
+(defn game-controls [{:keys [game/started?]}]
+  [:button.btn.w-full#game-controls {:type        "submit"
+                                     :hx-swap-oob true
+                                     :class       (when started? "bg-red-500 hover:bg-red-700")}
+   (if started? "Stop" "Start")])
 
 (defn sidebar [{:keys [uri games game]}]
   [:.h-screen.w-80.p-3.pr-0.flex.flex-col.flex-grow
@@ -73,7 +68,12 @@
         :selected (str/starts-with? uri url)}
        name])]
    [:.grow]
-   (game-controls uri game)
+   (when game
+     (biff/form
+       {:hx-post   uri
+        :hx-swap   "outerHTML"
+        :hx-target "#game-controls"}
+       (game-controls game)))
    [:.h-3]])
 
 (defn page [ctx & body]

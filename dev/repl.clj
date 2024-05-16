@@ -72,7 +72,7 @@
        '{:find  (pull game [*])
          :where [[game :game/started?]]}))
 
-  ;; Stop game
+  ;; Stop all games
   (let [{:keys [biff/db] :as ctx} (get-context)
         game-ids (biff/lookup-id-all db :game/started? true)]
     (biff/submit-tx ctx

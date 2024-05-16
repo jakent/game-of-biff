@@ -38,13 +38,12 @@
     ctx
     (grid nil)))
 
-(defn game-page [{:keys [game] :as ctx}]
-  (tap> {:game-page ctx})
+(defn game-page [{:keys [uri game] :as ctx}]
   (ui/page
     ctx
     [:.flex
      {:hx-ext     "ws"
-      :ws-connect (format "/game/%s/connect" (:xt/id game))}
+      :ws-connect (str uri "/connect")}
      (grid game)]))
 
 (defn wrap-games [handler]
@@ -64,20 +63,20 @@
       {:status  303
        :headers {"location" "/"}})))
 
-(defn increment [{:keys [game uri] :as ctx}]
+(defn increment [{:keys [game] :as ctx}]
   (let [update (-> (update game :game/started? not)
-                    (assoc :db/op :update
-                           :db/doc-type :game))]
+                   (assoc :db/op :update
+                          :db/doc-type :game))]
     (biff/submit-tx ctx [update])
-    (ui/game-controls uri update)))
+    (ui/game-controls update)))
 
 (defn click-cell [{:keys [game params] :as ctx}]
   (let [coord (-> params :cell read-string)]
     (biff/submit-tx ctx
-                    [{:db/op       :update
-                      :db/doc-type :game
-                      :xt/id       (:xt/id game)
-                      :game/living (conj (:game/living game) coord)}])
+      [{:db/op       :update
+        :db/doc-type :game
+        :xt/id       (:xt/id game)
+        :game/living (conj (:game/living game) coord)}])
     (cell {:alive true :coord coord})))
 
 (defn connect [{:keys [game-of-biff/chat-clients game]}]
@@ -95,32 +94,17 @@
                                              (cond-> chat-clients
                                                      (empty? (get chat-clients game-id)) (dissoc game-id)))))))}}))
 
-(defn on-game-update [{:keys [game-of-biff/chat-clients]} tx]
+(defn on-game-update [{:keys [game-of-biff/chat-clients uri]} tx]
   (doseq [[op & args] (::xt/tx-ops tx)
           :when (= op ::xt/put)
           :let [[doc] args]
           :when (contains? doc :game/living)
           :let [html (rum/render-static-markup
-                       (grid doc))]
+                       [:<>
+                        (grid doc)
+                        (ui/game-controls doc)])]
           ws (get @chat-clients (:xt/id doc))]
     (jetty/send! ws html)))
-
-(defn every-n-seconds [n]
-  (iterate #(biff/add-seconds % n) (java.util.Date.)))
-
-
-(defn games-to-increment [db]
-  (biff/lookup-all db :game/started? true))
-
-(defn increment-started-games [{:keys [biff/db] :as ctx}]
-  (biff/submit-tx ctx
-                  (->> (games-to-increment db)
-                       (map (fn [game]
-                              (println "from: " (:game/name game) (:game/living game))
-                              (let [tx (-> (assoc game :db/doc-type :game)
-                                           (update :game/living rules/tick))]
-                                (println "to:   " (:game/name tx) (:game/living tx))
-                                tx))))))
 
 (def module
   {:routes ["" {:middleware [wrap-games]}
@@ -130,6 +114,4 @@
                   :patch click-cell
                   :post  increment}]
              ["/connect" {:get connect}]]]
-   :on-tx  on-game-update
-   :tasks  [{:task     #'increment-started-games
-             :schedule #(every-n-seconds 1)}]})
+   :on-tx  on-game-update})
